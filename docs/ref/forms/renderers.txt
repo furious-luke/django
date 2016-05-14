@@ -5,10 +5,6 @@ The form rendering API
 .. versionadded:: 1.10
 
 Django form widgets are rendered using the Django template backend system.
-By default, if Jinja2 is installed, the
-:class:`~django.template.backends.jinja2.Jinja2` backend is used. Otherwise,
-forms are rendered with the
-:class:`~django.template.backends.django.DjangoTemplates` backend.
 
 The form rendering process can be customized at several levels:
 
@@ -25,10 +21,9 @@ Widget templates are stored in the ``django/forms/widgets`` path. A project
 can provide a custom template for ``input.html`` by defining
 ``django/forms/widgets/input.html``, for example.
 
-The rendering of form templates is controlled by a customizable renderer
-class. A custom renderer can be specified by updating the
-:setting:`FORM_RENDERER` setting. It defaults to
-``'django.forms.renderers.templates.TemplateRenderer'``.
+The rendering of form templates is controlled by a customizable renderer class.
+A custom renderer can be specified by updating the :setting:`FORM_RENDERER`
+setting. It defaults to ``'django.forms.renderers.templates.TemplateRenderer'``.
 
 .. module:: django.forms.renderers.templates
 
@@ -40,14 +35,19 @@ class. A custom renderer can be specified by updating the
     or raises :exc:`~django.template.TemplateDoesNotExist`. First attempts to
     load the template via :class:`~django.template.loader.get_template`, which
     uses the template engines configured in :setting:`TEMPLATES`. If the
-    template is not found by those engines, falls back to the built-in form
-    templates shipped with Django (using Jinja2 if installed, the Django
+    template is not found by those engines, it falls back to the built-in form
+    templates shipped with Django (using Jinja2 if installed or Django
     template language otherwise).
 
 .. method:: render(template_name, context, request=None)
 
     Renders the ``template_name`` and ``context``. Calls :meth:`.get_template`
     to load the given ``template_name``.
+
+    If you implement a custom renderer, this is the only method that Django
+    calls and therefore that you must implement. :meth:`get_template` is called
+    by ``TemplateRenderer.render()``, but your render doesn't need to follow
+    this pattern.
 
 If you want to use a custom template engine specifically for form rendering,
 you could create your own custom renderer subclass like::
@@ -68,13 +68,17 @@ you could create your own custom renderer subclass like::
                 'OPTIONS': {},
             })
 
-Django ships with one alternative renderer class, a simple one that uses only
-the built-in default form templates and does not consult the template engines
-configured via :setting:`TEMPLATES`. This may be useful for standalone usage of
-Django's forms library, or just for simplicity if you don't ever need to
+.. class:: StandaloneTemplateRenderer
+
+Django includes a simple renderer class that uses only the built-in default
+form templates and doesn't require (or use) any template engines configured via
+the :setting:`TEMPLATES` setting. This may be useful for standalone usage of
+``django.forms`` or just for simplicity if you don't ever need to
 override or add to the default form templates. To use this renderer, set
 :setting:`FORM_RENDERER` to
-``'django.forms.renderers.templates.StandaloneTemplateRenderer'``.
+``'django.forms.renderers.templates.StandaloneTemplateRenderer'``. It uses
+a :class:`~django.template.backends.jinja2.Jinja2` backend if installed or
+:class:`~django.template.backends.django.DjangoTemplates` otherwise.
 
 Customizing widget rendering
 ----------------------------
@@ -83,10 +87,12 @@ Form widgets are rendered with the Django template system. This gives you full
 control of widget output.
 
 Each widget has a ``template_name`` attribute, such as
-``django/forms/widgets/textarea.html``. When rendered, this template receives
-a context from ``Widget.get_context()``. By default, widgets receive a single
-value in the context, ``widget``. This is a dictionary that contains values
-like:
+``'django/forms/widgets/textarea.html'``. See :ref:`built-in widgets` for the
+name of each widget's template.
+
+When rendered, the template receives a context from
+:meth:`.Widget.get_context`. By default, widgets receive a single value in the
+context, ``widget``. This is a dictionary that contains values like:
 
 * ``name``
 * ``value``
@@ -95,16 +101,15 @@ like:
 * ``template_name``
 
 Some widgets add further information to the context. For instance, all widgets
-that subclass ``Input`` define ``widget['type']``, whereas ``MultiWidgets``
-define ``widget['subwidgets']`` for looping purposes.
+that subclass ``Input`` defines ``widget['type']`` and :class:`.MultiWidget`
+defines ``widget['subwidgets']`` for looping purposes.
 
-To override templates in your project, follow the instructions in the form
-rendering docs.
+Overriding widget templates works the same as overriding other templates. The
+:class:`TemplateRenderer` uses :func:`~django.template.loader.get_template` to
+find a template.
 
-Public methods/attributes:
+Overriding the renderer per form
+--------------------------------
 
-    template_name: The name of the template used to render this widget.
-
-    get_context: Returns values used in the template context.
-
-    format_value: Formats a given value for use in the template.
+You can provide a custom render by setting the :attr:`.Form.default_renderer`
+attribute or by using the ``renderer`` argument of :meth:`.Widget.render`.
