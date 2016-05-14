@@ -52,11 +52,7 @@ class BoundField(object):
         """
         id_ = self.field.widget.attrs.get('id') or self.auto_id
         attrs = {'id': id_} if id_ else {}
-        for widget in self.field.widget.subwidgets(
-            name=self.html_name,
-            value=self.value(),
-            attrs=attrs,
-        ):
+        for widget in self.field.widget.subwidgets(name=self.html_name, value=self.value(), attrs=attrs):
             yield BoundWidget(self.field.widget, widget, self.form.renderer)
 
     def __len__(self):
@@ -117,7 +113,7 @@ class BoundField(object):
             warnings.warn(
                 'Backwards compatibility for widgets without support for the '
                 '`renderer` argument in Widget.render() will be removed in '
-                'Django 2.0',
+                'Django 2.0.',
                 RemovedInDjango20Warning, stacklevel=2,
             )
 
@@ -255,7 +251,7 @@ class BoundField(object):
 @python_2_unicode_compatible
 class BoundWidget(object):
     """
-    A container class used when iterating over widgets. This is useful for
+    A container class used for iterating over widgets. This is useful for
     widgets that have choices. For example, the following can be used in a
     template:
 
@@ -276,13 +272,8 @@ class BoundWidget(object):
         return self.tag(wrap_label=True)
 
     def tag(self, wrap_label=False):
-        context = {
-            'widget': self.data,
-            'wrap_label': wrap_label,
-        }
-        return self.parent_widget._render(
-            self.template_name, context, self.renderer,
-        )
+        context = {'widget': self.data, 'wrap_label': wrap_label}
+        return self.parent_widget._render(self.template_name, context, self.renderer)
 
     @property
     def template_name(self):

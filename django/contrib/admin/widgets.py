@@ -154,10 +154,8 @@ class ForeignKeyRawIdWidget(forms.TextInput):
 
             context['related_url'] = mark_safe(related_url)
             context['link_title'] = _('Lookup')
-            context['widget']['attrs'].setdefault(
-                # The JavaScript code looks for this hook.
-                'class', 'vForeignKeyRawIdAdminField',
-            )
+            # The JavaScript code looks for this class.
+            context['widget']['attrs'].setdefault('class', 'vForeignKeyRawIdAdminField')
 
         if context['widget']['value']:
             context['link_label'], context['link_url'] = self.label_and_url_for_value(value)
@@ -353,9 +351,7 @@ class AdminURLFieldWidget(forms.URLInput):
         super(AdminURLFieldWidget, self).__init__(attrs=final_attrs)
 
     def get_context(self, name, value, attrs):
-        context = super(AdminURLFieldWidget, self).get_context(
-            name, value, attrs,
-        )
+        context = super(AdminURLFieldWidget, self).get_context(name, value, attrs)
         context['current_label'] = _('Currently:')
         context['change_label'] = _('Change:')
         context['widget']['href'] = smart_urlquote(context['widget']['value'])

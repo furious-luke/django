@@ -345,9 +345,7 @@ class MultipleHiddenInput(HiddenInput):
         return data.get(name)
 
     def format_value(self, value):
-        if value is None:
-            return []
-        return value
+        return [] if value is None else value
 
 
 class FileInput(Input):
@@ -419,6 +417,7 @@ class ClearableFileInput(FileInput):
         upload = super(ClearableFileInput, self).value_from_datadict(data, files, name)
         if not self.is_required and CheckboxInput().value_from_datadict(
                 data, files, self.clear_checkbox_name(name)):
+
             if upload:
                 # If the user contradicts themselves (uploads a new file AND
                 # checks the "clear" checkbox), we return a unique marker
@@ -603,20 +602,13 @@ class ChoiceWidget(Widget):
 
         return groups
 
-    def create_option(self, name, value, label, selected, index,
-                      subindex=None, attrs=None):
-        if subindex is None:
-            index = str(index)
-        else:
-            index = "%s_%s" % (index, subindex)
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        index = str(index) if subindex is None else "%s_%s" % (index, subindex)
 
         if attrs is None:
             attrs = {}
 
-        if self.option_inherits_attrs:
-            option_attrs = self.build_attrs(self.attrs, attrs)
-        else:
-            option_attrs = {}
+        option_attrs = self.build_attrs(self.attrs, attrs) if self.option_inherits_attrs else {}
 
         if selected:
             option_attrs.update(self.checked_attribute)
@@ -637,9 +629,7 @@ class ChoiceWidget(Widget):
 
     def get_context(self, name, value, attrs=None):
         context = super(ChoiceWidget, self).get_context(name, value, attrs)
-        context['widget']['optgroups'] = self.optgroups(
-            name, context['widget']['value'], attrs,
-        )
+        context['widget']['optgroups'] = self.optgroups(name, context['widget']['value'], attrs)
         context['wrap_label'] = True
         return context
 
@@ -753,7 +743,6 @@ class MultiWidget(Widget):
 
     You'll probably want to use this class with MultiValueField.
     """
-
     template_name = 'django/forms/widgets/multiwidget.html'
 
     def __init__(self, widgets, attrs=None):
@@ -790,9 +779,7 @@ class MultiWidget(Widget):
             else:
                 widget_attrs = final_attrs
 
-            subwidgets.append(widget.get_context(
-                widget_name, widget_value, widget_attrs,
-            )['widget'])
+            subwidgets.append(widget.get_context(widget_name, widget_value, widget_attrs)['widget'])
 
         context['widget']['subwidgets'] = subwidgets
         return context

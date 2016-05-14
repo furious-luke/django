@@ -15,7 +15,7 @@ ROOT = os.path.dirname(forms.__file__)
 
 
 class StandaloneTemplateRenderer(object):
-    """A renderer that can only find the built-in default form templates."""
+    """Render using only the built-in templates."""
     def get_template(self, template_name):
         return self.standalone_engine.get_template(template_name)
 
