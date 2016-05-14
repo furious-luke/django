@@ -6,6 +6,7 @@ from django.forms.renderers.templates import (
 )
 from django.template import TemplateDoesNotExist
 from django.test import SimpleTestCase
+from django.utils._os import upath
 
 try:
     import jinja2
@@ -21,7 +22,7 @@ class StandaloneTemplateRendererTests(SimpleTestCase):
         renderer = StandaloneTemplateRenderer()
         tpl = renderer.get_template(self.tpl_name)
         expected_path = os.path.join(ROOT, 'jinja2', self.tpl_name)
-        self.assertEqual(tpl.origin.name, expected_path.replace('/', os.sep))
+        self.assertEqual(upath(tpl.origin.name), expected_path.replace('/', os.sep))
 
     @unittest.skipIf(jinja2, 'jinja2 installed.')
     def test_get_template_dtl(self):
@@ -45,7 +46,7 @@ class TemplateRendererTests(SimpleTestCase):
         tpl = renderer.get_template('forms_tests/custom_widget.html')
         expected_path = os.path.abspath(
             os.path.join(
-                os.path.dirname(__file__),
+                upath(os.path.dirname(__file__)),
                 '..',
                 'templates/forms_tests/custom_widget.html',
             )
@@ -55,12 +56,12 @@ class TemplateRendererTests(SimpleTestCase):
     def test_fallback_to_builtin_template(self):
         renderer = TemplateRenderer()
         tpl = renderer.get_template('django/forms/widgets/input.html')
-        # Passes for either DTL or Jinja2
+        # Sufficiently generic to pass for either DTL or Jinja2.
         self.assertTrue(tpl.origin.name.startswith(ROOT))
 
     def test_template_not_found(self):
         renderer = TemplateRenderer()
         with self.assertRaises(TemplateDoesNotExist) as cm:
             renderer.get_template('does/not/exist.html')
-        # Records that both TEMPLATES engine and standalone engine were tried
+        # Records that both TEMPLATES engine and standalone engine were tried.
         self.assertEqual(len(cm.exception.chain), 2)

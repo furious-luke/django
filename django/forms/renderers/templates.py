@@ -5,13 +5,14 @@ from django.template import TemplateDoesNotExist
 from django.template.backends.django import DjangoTemplates
 from django.template.loader import get_template
 from django.utils.functional import cached_property
+from django.utils._os import upath
 
 try:
     import jinja2
 except ImportError:
     jinja2 = None
 
-ROOT = os.path.dirname(forms.__file__)
+ROOT = upath(os.path.dirname(forms.__file__))
 
 
 class StandaloneTemplateRenderer(object):
