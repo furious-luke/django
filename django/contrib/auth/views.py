@@ -13,7 +13,8 @@ from django.contrib.auth.forms import (
 )
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sites.shortcuts import get_current_site
-from django.http import HttpResponseRedirect, QueryDict
+from django.http import HttpResponseRedirect, QueryDict, JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import resolve_url
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -75,12 +76,45 @@ def login(request, template_name='registration/login.html',
                 "Redirection loop for authenticated user detected. Check that "
                 "your LOGIN_REDIRECT_URL doesn't point to a login page."
             )
+        if request.is_ajax():
+            return JsonResponse({
+                'user': request.user.id,
+                'redirect': redirect_to
+            })
         return HttpResponseRedirect(redirect_to)
     elif request.method == "POST":
         form = authentication_form(request, data=request.POST)
         if form.is_valid():
             auth_login(request, form.get_user())
-            return HttpResponseRedirect(_get_login_redirect_url(request, redirect_to))
+            redirect_to = _get_login_redirect_url(request, redirect_to)
+
+            # If the request is AJAX return with an appropriate response. Note
+            # that the rotated CSRF token is only returned if the connection is
+            # secure, or if we are in debug mode (the development server does not
+            # allow HTTPS connections).
+            if request.is_ajax():
+                if request.is_secure() or settings.DEBUG:
+                    return JsonResponse({
+                        'user': form.get_user_id(),
+                        'redirect': redirect_to,
+                        'csrf_token': get_token(request),
+                    })
+                else:
+                    return JsonResponse({
+                        'user': form.get_user_id(),
+                        'redirect': redirect_to,
+                    })
+
+            return HttpResponseRedirect(redirect_to)
+
+        # If form is invalid during AJAX request then return an error.
+        elif request.is_ajax():
+            return JsonResponse(form.errors, status=400)
+
+    # Return an error if login is attempted using AJAX via GET.
+    elif request.is_ajax():
+        return JsonResponse({'__all__': ['insecure login attempt']}, status=400)
+
     else:
         form = authentication_form(request)
 
@@ -124,7 +158,15 @@ def logout(request, next_page=None,
 
     if next_page:
         # Redirect to this page until the session has been cleared.
+        if request.is_ajax():
+            return JsonResponse({
+                'redirect': next_page
+            })
         return HttpResponseRedirect(next_page)
+
+    # If logging out over AJAX then return an empty response.
+    if request.is_ajax():
+        return JsonResponse({})
 
     current_site = get_current_site(request)
     context = {

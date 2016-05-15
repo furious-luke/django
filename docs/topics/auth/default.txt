@@ -895,6 +895,15 @@ Django provides no default template for the authentication views. You should
 create your own templates for the views you want to use. The template context
 is documented in each view, see :ref:`all-authentication-views`.
 
+.. note::
+
+    AJAX requests are permitted for both the `login` and `logout` views.
+    Successfully logging in returns a JSON object containing the primary key
+    of the authenticated user model, an URL to redirect to (if applicable),
+    and the new CSRF token to use, (`user`, `redirect`, and `csrf_token`,
+    respectively). Note that the CSRF token will not be sent if the request
+    is not secure. Successful logouts return just the redirect URL.
+
 .. _using-the-views:
 
 Using the views

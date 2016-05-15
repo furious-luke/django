@@ -34,6 +34,22 @@ from .models import CustomUser, UUIDUser
 from .settings import AUTH_TEMPLATES
 
 
+class AJAXTestMixin(object):
+    def setUp(self):
+        super(AJAXTestMixin, self).setUp()
+
+        # Monkey patch `self.client.post` to use an AJAX.
+        self._client_post = self.client.post
+        self.client.post = lambda *a, **k: self._client_post(
+            *a, HTTP_X_REQUESTED_WITH='XMLHttpRequest', **k
+        )
+
+    def logout(self):
+        response = self.client.get('/admin/logout/', HTTP_X_REQUESTED_WITH='XMLHttpRequest')
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(SESSION_KEY, self.client.session)
+
+
 @override_settings(
     LANGUAGES=[('en', 'English')],
     LANGUAGE_CODE='en',
@@ -627,6 +643,56 @@ class LoginTest(AuthViewsTestCase):
         self.assertNotEqual(original_session_key, self.client.session.session_key)
 
 
+class AJAXLoginTest(AJAXTestMixin, LoginTest):
+    """Same as LoginTest but for AJAX requests."""
+    def test_security_check(self, password='password'):
+        login_url = reverse('login')
+
+        # Those URLs should not pass the security check
+        for bad_url in ('http://example.com',
+                        'http:///example.com',
+                        'https://example.com',
+                        'ftp://example.com',
+                        '///example.com',
+                        '//example.com',
+                        'javascript:alert("XSS")'):
+
+            nasty_url = '%(url)s?%(next)s=%(bad_url)s' % {
+                'url': login_url,
+                'next': REDIRECT_FIELD_NAME,
+                'bad_url': urlquote(bad_url),
+            }
+            response = self.client.post(nasty_url, {
+                'username': 'testclient',
+                'password': password,
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertNotIn(bad_url, response.json()['redirect'],
+                             "%s should be blocked" % bad_url)
+
+        # These URLs *should* still pass the security check
+        for good_url in ('/view/?param=http://example.com',
+                         '/view/?param=https://example.com',
+                         '/view?param=ftp://example.com',
+                         'view/?param=//example.com',
+                         'https://testserver/',
+                         'HTTPS://testserver/',
+                         '//testserver/',
+                         '/url%20with%20spaces/'):  # see ticket #12534
+            safe_url = '%(url)s?%(next)s=%(good_url)s' % {
+                'url': login_url,
+                'next': REDIRECT_FIELD_NAME,
+                'good_url': urlquote(good_url),
+            }
+            response = self.client.post(safe_url, {
+                'username': 'testclient',
+                'password': password,
+            })
+            self.assertEqual(response.status_code, 200)
+            self.assertIn(good_url, response.json()['redirect'],
+                          "%s should be allowed" % good_url)
+
+
 class LoginURLSettings(AuthViewsTestCase):
     """Tests for settings.LOGIN_URL."""
     def assertLoginURLEquals(self, url, parse_qs=False):
@@ -763,6 +829,12 @@ class LoginRedirectAuthenticatedUser(AuthViewsTestCase):
 
 class LogoutTest(AuthViewsTestCase):
 
+    def _get_url(self, response):
+        return response.url
+
+    def _get_status(self):
+        return 302
+
     def confirm_logged_out(self):
         self.assertNotIn(SESSION_KEY, self.client.session)
 
@@ -791,12 +863,12 @@ class LogoutTest(AuthViewsTestCase):
         # Bug 11223
         self.login()
         response = self.client.get('/logout/next_page/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/somewhere/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/somewhere/')
 
         response = self.client.get('/logout/next_page/?next=/login/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/login/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/login/')
 
         self.confirm_logged_out()
 
@@ -804,32 +876,32 @@ class LogoutTest(AuthViewsTestCase):
         "Logout with next_page option given redirects to specified resource"
         self.login()
         response = self.client.get('/logout/next_page/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/somewhere/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/somewhere/')
         self.confirm_logged_out()
 
     def test_logout_with_redirect_argument(self):
         "Logout with query string redirects to specified resource"
         self.login()
         response = self.client.get('/logout/?next=/login/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/login/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/login/')
         self.confirm_logged_out()
 
     def test_logout_with_custom_redirect_argument(self):
         "Logout with custom query string redirects to specified resource"
         self.login()
         response = self.client.get('/logout/custom_query/?follow=/somewhere/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/somewhere/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/somewhere/')
         self.confirm_logged_out()
 
     def test_logout_with_named_redirect(self):
         "Logout resolves names or URLs passed as next_page."
         self.login()
         response = self.client.get('/logout/next_page/named/')
-        self.assertEqual(response.status_code, 302)
-        self.assertURLEqual(response.url, '/password_reset/')
+        self.assertEqual(response.status_code, self._get_status())
+        self.assertURLEqual(self._get_url(response), '/password_reset/')
         self.confirm_logged_out()
 
     def test_security_check(self, password='password'):
@@ -850,8 +922,8 @@ class LogoutTest(AuthViewsTestCase):
             }
             self.login()
             response = self.client.get(nasty_url)
-            self.assertEqual(response.status_code, 302)
-            self.assertNotIn(bad_url, response.url,
+            self.assertEqual(response.status_code, self._get_status())
+            self.assertNotIn(bad_url, self._get_url(response),
                              "%s should be blocked" % bad_url)
             self.confirm_logged_out()
 
@@ -871,8 +943,8 @@ class LogoutTest(AuthViewsTestCase):
             }
             self.login()
             response = self.client.get(safe_url)
-            self.assertEqual(response.status_code, 302)
-            self.assertIn(good_url, response.url, "%s should be allowed" % good_url)
+            self.assertEqual(response.status_code, self._get_status())
+            self.assertIn(good_url, self._get_url(response), "%s should be allowed" % good_url)
             self.confirm_logged_out()
 
     def test_logout_preserve_language(self):
@@ -898,6 +970,44 @@ class LogoutTest(AuthViewsTestCase):
         self.login()
         response = self.client.get('/logout/')
         self.assertRedirects(response, '/logout/', fetch_redirect_response=False)
+
+
+class AJAXLogoutTest(AJAXTestMixin, LogoutTest):
+    """Same as LogoutTest but for AJAX requests."""
+    def setUp(self):
+        super(AJAXLogoutTest, self).setUp()
+
+        # Monkey patch `self.client.post` to use an AJAX.
+        self._client_get = self.client.get
+        self.client.get = lambda *a, **k: self._client_get(
+            *a, HTTP_X_REQUESTED_WITH='XMLHttpRequest', **k
+        )
+
+    def _get_url(self, response):
+        return response.json()['redirect']
+
+    def _get_status(self):
+        return 200
+
+    # Disable for AJAX.
+    def test_logout_default(self):
+        pass
+
+    # Disable for AJAX.
+    def test_14377(self):
+        pass
+
+    @override_settings(LOGOUT_REDIRECT_URL='/custom/')
+    def test_logout_redirect_url_setting(self):
+        self.login()
+        response = self.client.get('/logout/')
+        self.assertEqual(self._get_url(response), '/custom/')
+
+    @override_settings(LOGOUT_REDIRECT_URL='logout')
+    def test_logout_redirect_url_named_setting(self):
+        self.login()
+        response = self.client.get('/logout/')
+        self.assertEqual(self._get_url(response), '/logout/')
 
 
 # Redirect in test_user_change_password will fail if session auth hash
